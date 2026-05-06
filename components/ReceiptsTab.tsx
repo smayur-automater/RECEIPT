@@ -1,99 +1,121 @@
 'use client'
-
 import { useState } from 'react'
-import { Trash2, Sparkles } from 'lucide-react'
 import { Receipt, ATOCategory } from '@/types'
 import { CAT_META } from '@/lib/tax'
 
-interface Props {
-  receipts: Receipt[]
-  onDelete: (id: string) => void
+const CAT_COLORS: Record<string, string> = {
+  work_from_home: '#5eead4', vehicle: '#7eb8f7', tools_equipment: '#a78bfa',
+  clothing: '#f9a8d4', education: '#6ee7b7', phone_internet: '#93c5fd',
+  meals_entertainment: '#fca5a5', professional_services: '#fcd34d',
+  home_office: '#86efac', other: '#9ca3af',
 }
 
-export default function ReceiptsTab({ receipts, onDelete }: Props) {
+export default function ReceiptsTab({ receipts, onDelete }: { receipts: Receipt[]; onDelete: (id: string) => void }) {
   const [filter, setFilter] = useState<ATOCategory | ''>('')
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [confirmDel, setConfirmDel] = useState<string | null>(null)
 
-  const filtered = filter ? receipts.filter(r => r.category === filter) : receipts
-  const totalDeductions = filtered.reduce((s, r) => s + r.deduction_amount, 0)
+  const list = filter ? receipts.filter(r => r.category === filter) : receipts
+  const total = list.reduce((s, r) => s + r.deduction_amount, 0)
 
-  const handleDelete = (id: string) => {
-    if (confirmDelete === id) {
-      onDelete(id)
-      setConfirmDelete(null)
-    } else {
-      setConfirmDelete(id)
-      setTimeout(() => setConfirmDelete(null), 3000)
-    }
+  const del = (id: string) => {
+    if (confirmDel === id) { onDelete(id); setConfirmDel(null) }
+    else { setConfirmDel(id); setTimeout(() => setConfirmDel(null), 2800) }
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">FY 2024–25</p>
-          <p className="text-base font-bold">{receipts.length} receipts · <span className="text-green-700">${Math.round(totalDeductions).toLocaleString()} claimed</span></p>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)' }}>All receipts</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            {list.length} receipt{list.length !== 1 ? 's' : ''} · <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>${Math.round(total).toLocaleString()}</span> claimed
+          </div>
         </div>
-        <select
-          value={filter}
-          onChange={e => setFilter(e.target.value as ATOCategory | '')}
-          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5"
-        >
+        <select value={filter} onChange={e => setFilter(e.target.value as ATOCategory | '')} style={{ width: 'auto', fontSize: 12 }}>
           <option value="">All categories</option>
-          {Object.entries(CAT_META).map(([k, m]) => (
-            <option key={k} value={k}>{m.label}</option>
-          ))}
+          {Object.entries(CAT_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
         </select>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <p className="text-4xl mb-3">🧾</p>
-          <p className="text-sm">No receipts yet. Snap your first one!</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map(r => {
-            const meta = CAT_META[r.category] || CAT_META.other
-            return (
-              <div key={r.id} className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-gray-200 transition-colors">
-                <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-sm"
-                  style={{ backgroundColor: meta.color + '18' }}
-                >
-                  <span style={{ color: meta.color }}>$</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-semibold truncate">{r.merchant}</p>
-                    {r.ai_scanned && (
-                      <span className="flex items-center gap-0.5 text-xs bg-green-50 text-green-700 rounded-full px-1.5 py-0.5 font-bold flex-shrink-0">
-                        <Sparkles size={9} /> AI
-                      </span>
-                    )}
+      <div style={{ padding: '16px 28px' }}>
+        {list.length === 0 ? (
+          <div style={{ padding: '56px 24px', textAlign: 'center', color: 'var(--text-3)' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ margin: '0 auto 10px', display: 'block', stroke: 'var(--text-3)' }}>
+              <path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2z" strokeWidth="1.3" strokeLinejoin="round"/>
+              <path d="M9 9h6M9 13h4" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            <div style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 500 }}>No receipts yet</div>
+            <div style={{ fontSize: 12, marginTop: 3 }}>Add your first receipt to start tracking</div>
+          </div>
+        ) : (
+          <>
+            {/* Table header */}
+            <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 120px 90px 28px', gap: 12, padding: '6px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-3)', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
+              <div />
+              <div>Merchant</div>
+              <div>Category</div>
+              <div style={{ textAlign: 'right' }}>Deduction</div>
+              <div />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {list.map((r, i) => {
+                const meta = CAT_META[r.category] || CAT_META.other
+                const color = CAT_COLORS[r.category] || '#9ca3af'
+                const isFirst = i === 0, isLast = i === list.length - 1, isOnly = list.length === 1
+                return (
+                  <div key={r.id} style={{
+                    display: 'grid', gridTemplateColumns: '28px 1fr 120px 90px 28px',
+                    alignItems: 'center', gap: 12, padding: '9px 12px',
+                    background: 'var(--bg-2)', transition: 'background 0.12s',
+                    borderRadius: isOnly ? 'var(--radius-sm)' : isFirst ? 'var(--radius-sm) var(--radius-sm) 0 0' : isLast ? '0 0 var(--radius-sm) var(--radius-sm)' : 0,
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-3)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-2)')}
+                  >
+                    <div style={{ width: 28, height: 28, borderRadius: 5, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.merchant}</span>
+                        {r.ai_scanned && (
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', background: 'var(--accent-bg)', color: 'var(--accent-dim)', border: '1px solid var(--accent-border)', borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>AI</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>
+                        {r.date}{r.notes ? ` · ${r.notes}` : ''}
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta.label}</div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>${r.deduction_amount.toFixed(2)}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)' }}>${r.amount.toFixed(2)} paid</div>
+                    </div>
+
+                    <button onClick={() => del(r.id)} style={{
+                      width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      border: 'none', background: confirmDel === r.id ? 'var(--red-bg)' : 'transparent',
+                      borderRadius: 4, cursor: 'pointer',
+                      color: confirmDel === r.id ? 'var(--red)' : 'var(--text-3)',
+                      transition: 'all 0.12s',
+                    }}
+                      onMouseEnter={e => { (e.currentTarget.style.background = 'var(--red-bg)'); (e.currentTarget.style.color = 'var(--red)') }}
+                      onMouseLeave={e => { if (confirmDel !== r.id) { (e.currentTarget.style.background = 'transparent'); (e.currentTarget.style.color = 'var(--text-3)') } }}
+                      title={confirmDel === r.id ? 'Click again to confirm delete' : 'Delete'}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="M2 3h8M5 3V2h2v1M4.5 5v4M7.5 5v4M3 3l.5 7h5l.5-7" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
                   </div>
-                  <p className="text-xs text-gray-400 truncate">{r.date} · {meta.label}{r.notes ? ` · ${r.notes}` : ''}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold font-mono text-green-700">-${r.deduction_amount.toFixed(2)}</p>
-                  <p className="text-xs text-gray-400">${r.amount.toFixed(2)} total</p>
-                </div>
-                <button
-                  onClick={() => handleDelete(r.id)}
-                  className={`ml-1 p-1.5 rounded-lg transition-colors flex-shrink-0 ${
-                    confirmDelete === r.id
-                      ? 'bg-red-100 text-red-600'
-                      : 'text-gray-300 hover:text-red-400 hover:bg-red-50'
-                  }`}
-                  title={confirmDelete === r.id ? 'Click again to confirm' : 'Delete'}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      )}
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
