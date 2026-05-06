@@ -2,73 +2,64 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { ScanResult } from '@/types'
 
+// This endpoint receives raw OCR text (extracted client-side by Tesseract.js)
+// and uses Claude text-only to classify + structure the ATO deduction data.
+// No image is ever sent to Claude — dramatically cheaper and faster.
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const SYSTEM_PROMPT = `You are an expert Australian tax accountant specialising in ATO deductions for individuals, sole traders, and small businesses.
+const SYSTEM_PROMPT = `You are an expert Australian tax accountant specialising in ATO work-related expense deductions for individuals, sole traders, and small businesses.
 
-When given a receipt image, extract all relevant details and classify the expense according to ATO work-related expense categories.
+You will receive raw OCR text extracted from a receipt. Parse it and return structured tax deduction data.
 
-Always respond with ONLY a valid JSON object — no markdown, no code fences, no extra text.`
+Always respond with ONLY a valid JSON object. No markdown fences, no preamble, no explanation.`
 
-const USER_PROMPT = `Analyse this receipt and extract all details for an Australian tax deduction claim.
+const buildPrompt = (ocrText: string) => `Raw OCR text from a receipt:
 
-Respond ONLY with a JSON object in this exact format:
+<ocr_text>
+${ocrText}
+</ocr_text>
+
+Extract all details and return ONLY this JSON object:
 {
-  "merchant": "exact store/vendor name from receipt",
+  "merchant": "store or vendor name",
   "amount": 123.45,
   "date": "YYYY-MM-DD",
-  "category": "one of: work_from_home|vehicle|tools_equipment|clothing|education|phone_internet|meals_entertainment|professional_services|home_office|other",
+  "category": "work_from_home|vehicle|tools_equipment|clothing|education|phone_internet|meals_entertainment|professional_services|home_office|other",
   "work_pct": 0-100,
-  "notes": "concise business purpose description",
+  "notes": "concise business purpose (one sentence)",
   "ato_deductible_pct": 0-100,
   "confidence": 0-100,
-  "ato_tip": "one specific, actionable ATO compliance tip for this expense type",
-  "ocr_text": "key text lines extracted from the receipt"
+  "ato_tip": "one specific actionable ATO compliance tip for this expense type",
+  "ocr_text": "${ocrText.slice(0, 300).replace(/"/g, "'")}"
 }
 
 Rules:
-- amount: extract the TOTAL amount paid (include GST)
-- date: if unclear, use today's date
-- category: choose the most appropriate ATO work-related expense category
-- work_pct: realistic business-use percentage (e.g. phone=50, dedicated work tool=100, fuel=80)
-- ato_deductible_pct: per ATO rules (tools_equipment=100, phone_internet=50, vehicle=90, etc.)
-- confidence: how confident you are in the extraction (0-100)
-- ato_tip: specific to this receipt type, referencing current ATO rules`
+- amount: the final TOTAL paid including GST. Look for "TOTAL", "AMOUNT DUE", "GRAND TOTAL". Return as a number.
+- date: parse any date format into YYYY-MM-DD. If missing use today.
+- category: pick the single best-fitting ATO work-related expense category.
+- work_pct: realistic business-use % for this type (phone=50, dedicated work tools=100, fuel=80, internet=60).
+- ato_deductible_pct: per ATO rules — tools_equipment=100, phone_internet=50, vehicle=90, clothing=85, education=75, home_office=67, professional_services=90, meals_entertainment=50, other=80.
+- confidence: 0-100 reflecting how clearly the OCR text was readable and parsed.
+- ato_tip: cite a specific ATO rule or threshold relevant to this exact expense type.`
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { imageBase64, mimeType } = body
+    const { ocrText } = body
 
-    if (!imageBase64 || !mimeType) {
-      return NextResponse.json({ error: 'Missing imageBase64 or mimeType' }, { status: 400 })
-    }
-
-    const validMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-    if (!validMimeTypes.includes(mimeType)) {
-      return NextResponse.json({ error: 'Unsupported image type. Use JPEG, PNG, GIF, or WebP.' }, { status: 400 })
+    if (!ocrText || typeof ocrText !== 'string' || ocrText.trim().length < 5) {
+      return NextResponse.json(
+        { error: 'No readable text found in image. Try a clearer photo or enter details manually.' },
+        { status: 400 }
+      )
     }
 
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+      model: 'claude-haiku-4-5-20251001', // Fast + cheap for structured extraction
+      max_tokens: 600,
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-                data: imageBase64,
-              },
-            },
-            { type: 'text', text: USER_PROMPT },
-          ],
-        },
-      ],
+      messages: [{ role: 'user', content: buildPrompt(ocrText.slice(0, 2000)) }],
     })
 
     const rawText = message.content.find(b => b.type === 'text')?.text || ''
@@ -78,22 +69,21 @@ export async function POST(req: NextRequest) {
       parsed = JSON.parse(rawText.replace(/```json|```/g, '').trim())
     } catch {
       return NextResponse.json(
-        { error: 'Could not parse Claude response. Please try again or enter details manually.' },
+        { error: 'Could not structure receipt data. Please enter details manually.' },
         { status: 422 }
       )
     }
 
-    // Validate required fields
     if (!parsed.merchant || !parsed.amount || !parsed.category) {
       return NextResponse.json(
-        { error: 'Receipt could not be read clearly. Please enter details manually.' },
+        { error: 'Receipt text was unclear. Please check the fields and adjust.' },
         { status: 422 }
       )
     }
 
     return NextResponse.json({ result: parsed })
   } catch (error: unknown) {
-    console.error('Scan receipt error:', error)
+    console.error('Classify receipt error:', error)
     const msg = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({ error: msg }, { status: 500 })
   }
