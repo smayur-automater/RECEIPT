@@ -27,8 +27,6 @@ export interface Receipt {
   confidence?: number
   fy_year: string
   created_at: string
-  image_data?: string   // base64 data URL stored with the record
-  image_thumb?: string  // compressed thumbnail for list view
 }
 
 export interface TaxProfile {

@@ -47,15 +47,7 @@ export default function Home() {
     setProfile(p)
     localStorage.setItem('sc_profile', JSON.stringify(p))
   }
-  const addReceipt = (r: Receipt) => {
-    // upsert by id — handles both new saves and edits
-    setReceipts(prev => {
-      const exists = prev.some(x => x.id === r.id)
-      const updated = exists ? prev.map(x => x.id === r.id ? r : x) : [r, ...prev]
-      localStorage.setItem('sc_receipts', JSON.stringify(updated))
-      return updated
-    })
-  }
+  const addReceipt = (r: Receipt) => { saveReceipts([r, ...receipts]); setTab('receipts') }
   const deleteReceipt = (id: string) => saveReceipts(receipts.filter(r => r.id !== id))
 
   const fyReceipts = receipts.filter(r => r.fy_year === fy)
