@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #1a6b3f;
+  --brand-mid: #3d9e6e;
+  --brand-light: #e8f5ee;
+  --font-display: var(--font-syne), sans-serif;
+  --font-mono: var(--font-mono-dm), monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-display);
+  background: #f8faf9;
+  color: #111;
+  min-height: 100vh;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0d1510;
+    color: #f0f4f1;
+  }
+}
+
+/* Receipt drag-and-drop zone */
+.drop-zone-active {
+  border-color: var(--brand) !important;
+  background: #d4eddf !important;
+}
+
+/* Spinner animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  animation: spin 0.7s linear infinite;
+}
+
+/* Confidence bar animation */
+.conf-bar-fill {
+  transition: width 0.6s ease;
+}
+
+/* Smooth tab transitions */
+.tab-panel-enter {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.tab-panel-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 0.2s ease;
+}
