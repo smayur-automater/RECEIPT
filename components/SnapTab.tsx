@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from 'react'
 import { Upload, Plus, AlertCircle, Info, Sparkles } from 'lucide-react'
 import { ATOCategory, Receipt, TaxProfile, ScanResult } from '@/types'
 import { CAT_META, calcDeduction, calcTaxBack, getCurrentFY } from '@/lib/tax'
-import { v4 as uuidv4 } from 'uuid'
+
 
 const CATEGORIES = Object.entries(CAT_META) as [ATOCategory, typeof CAT_META[ATOCategory]][]
 
@@ -101,7 +101,7 @@ export default function SnapTab({ profile, onAdd }: Props) {
   const handleAdd = () => {
     if (!merchant || !amt) { setError('Please enter a merchant name and amount.'); return }
     const receipt: Receipt = {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       merchant,
       amount: amt,
       date: new Date().toISOString().split('T')[0],
