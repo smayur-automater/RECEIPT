@@ -2,6 +2,12 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { ScanResult } from '@/types'
 
+// This endpoint receives raw OCR text (extracted client-side by Tesseract.js)
+// and uses Claude text-only to classify + structure the ATO deduction data.
+// No image is ever sent to Claude — dramatically cheaper and faster.
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
 const SYSTEM_PROMPT = `You are an expert Australian tax accountant specialising in ATO work-related expense deductions for individuals, sole traders, and small businesses.
 
 You will receive raw OCR text extracted from a receipt. Parse it and return structured tax deduction data.
@@ -25,30 +31,20 @@ Extract all details and return ONLY this JSON object:
   "ato_deductible_pct": 0-100,
   "confidence": 0-100,
   "ato_tip": "one specific actionable ATO compliance tip for this expense type",
-  "ocr_text": "first 200 chars of the raw text"
+  "ocr_text": "${ocrText.slice(0, 300).replace(/"/g, "'")}"
 }
 
 Rules:
-- amount: the final TOTAL paid including GST. Look for TOTAL, AMOUNT DUE, GRAND TOTAL. Return as a number.
+- amount: the final TOTAL paid including GST. Look for "TOTAL", "AMOUNT DUE", "GRAND TOTAL". Return as a number.
 - date: parse any date format into YYYY-MM-DD. If missing use today.
 - category: pick the single best-fitting ATO work-related expense category.
-- work_pct: realistic business-use % (phone=50, dedicated work tools=100, fuel=80, internet=60).
+- work_pct: realistic business-use % for this type (phone=50, dedicated work tools=100, fuel=80, internet=60).
 - ato_deductible_pct: per ATO rules — tools_equipment=100, phone_internet=50, vehicle=90, clothing=85, education=75, home_office=67, professional_services=90, meals_entertainment=50, other=80.
-- confidence: 0-100 reflecting OCR clarity.
-- ato_tip: cite a specific ATO rule relevant to this expense.`
+- confidence: 0-100 reflecting how clearly the OCR text was readable and parsed.
+- ato_tip: cite a specific ATO rule or threshold relevant to this exact expense type.`
 
 export async function POST(req: NextRequest) {
   try {
-    // Read API key per-request so Vercel env vars are always fresh
-    const apiKey = process.env.ANTHROPIC_API_KEY
-
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'ANTHROPIC_API_KEY is not set. Add it to your Vercel environment variables or .env.local file.' },
-        { status: 500 }
-      )
-    }
-
     const body = await req.json()
     const { ocrText } = body
 
@@ -59,11 +55,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Instantiate client inside handler — never at module level on serverless
-    const client = new Anthropic({ apiKey })
-
     const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-haiku-4-5-20251001', // Fast + cheap for structured extraction
       max_tokens: 600,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildPrompt(ocrText.slice(0, 2000)) }],
@@ -91,18 +84,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ result: parsed })
   } catch (error: unknown) {
     console.error('Classify receipt error:', error)
-
-    // Surface Anthropic API errors clearly
-    if (error instanceof Error) {
-      if (error.message.includes('401') || error.message.includes('authentication')) {
-        return NextResponse.json(
-          { error: 'Invalid Anthropic API key. Check ANTHROPIC_API_KEY in your Vercel environment variables.' },
-          { status: 401 }
-        )
-      }
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ error: 'Unknown error' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
